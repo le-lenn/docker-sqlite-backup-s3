@@ -58,6 +58,7 @@ services:
       # MinIO server in this Compose stack.
       ENDPOINT_URL: http://minio:9000
       AWS_DEFAULT_REGION: us-west-2
+      ENCRYPTION_KEY: your-32-char-encryption-key-here
       # Optional: if using an S3-compatible provider (MinIO, Cloudflare R2, Wasabi)
       # ENDPOINT_URL: https://your-provider-endpoint
       # Optional: tune backup/restore busy timeout (ms), default 10000
@@ -90,11 +91,12 @@ services:
       # MinIO server in this Compose stack.
       ENDPOINT_URL: http://minio:9000
       AWS_DEFAULT_REGION: us-west-2
+      ENCRYPTION_KEY: your-32-char-encryption-key-here
       # Optional: if using an S3-compatible provider (MinIO, Cloudflare R2, Wasabi)
       # ENDPOINT_URL: https://your-provider-endpoint
       # Optional: tune backup/restore busy timeout (ms), default 10000
       # SQLITE_TIMEOUT_MS: 10000
-    command: ["restore", "20251130112400"]
+    command: ["restore", "20251130134500"]
     restart: no
     depends_on:
       - minio

@@ -26,6 +26,20 @@ export BACKUP_PATH=${BACKUP_PATH:-${DATABASE_PATH}.bak}
 export DATETIME=$(date "+%Y%m%d%H%M%S")
 # Backup/restore busy timeout in milliseconds (SQLite expects ms)
 export SQLITE_TIMEOUT_MS=${SQLITE_TIMEOUT_MS:-10000}
+export ENCRYPTION_KEY=${ENCRYPTION_KEY:-}
+
+# Detect if a file is OpenSSL salted (our encryption format)
+is_encrypted_file() {
+  local file="$1"
+  if [ ! -f "$file" ]; then
+    return 1
+  fi
+  # OpenSSL 'enc' with -salt writes a 'Salted__' header
+  if LC_ALL=C head -c 8 "$file" 2>/dev/null | grep -q '^Salted__$'; then
+    return 0
+  fi
+  return 1
+}
 
 # Add this script to the crontab and start crond
 cron() {
@@ -54,6 +68,22 @@ SQL
     exit 1
   fi
 
+  # Optionally encrypt the backup before upload
+  UPLOAD_SOURCE="$BACKUP_PATH"
+  if [[ -n "${ENCRYPTION_KEY}" ]]; then
+    echo "Encrypting backup before upload"
+    if openssl enc -aes-256-cbc -pbkdf2 -salt -iter 100000 -pass env:ENCRYPTION_KEY -in "$BACKUP_PATH" -out "${BACKUP_PATH}.enc"; then
+      UPLOAD_SOURCE="${BACKUP_PATH}.enc"
+      # Remove plaintext backup from disk to avoid leaving sensitive data around
+      rm -f "$BACKUP_PATH"
+    else
+      echo "Encryption failed"
+      # Ensure plaintext does not remain if encryption failed unexpectedly
+      rm -f "${BACKUP_PATH}.enc"
+      exit 1
+    fi
+  fi
+
   echo "Sending file to S3"
   # Push backup file to S3
   if aws s3 rm s3://${S3_BUCKET}/${S3_KEY_PREFIX}latest.bak; then
@@ -61,7 +91,7 @@ SQL
   else
     echo "No latest backup exists in S3"
   fi
-  if aws s3 cp $BACKUP_PATH s3://${S3_BUCKET}/${S3_KEY_PREFIX}latest.bak; then
+  if aws s3 cp "$UPLOAD_SOURCE" s3://${S3_BUCKET}/${S3_KEY_PREFIX}latest.bak; then
     echo "Backup file copied to s3://${S3_BUCKET}/${S3_KEY_PREFIX}latest.bak"
   else
     echo "Backup file failed to upload"
@@ -119,6 +149,23 @@ restore() {
     exit 1
   fi
 
+  # If the downloaded file is encrypted, require ENCRYPTION_KEY and decrypt
+  local RESTORE_SOURCE="$BACKUP_PATH"
+  if is_encrypted_file "$BACKUP_PATH"; then
+    echo "Downloaded backup appears to be encrypted"
+    if [[ -z "${ENCRYPTION_KEY}" ]]; then
+      echo "Error: Backup is encrypted but ENCRYPTION_KEY is not set. Cannot restore."
+      exit 1
+    fi
+    local DECRYPTED_PATH="${BACKUP_PATH}.decrypted"
+    if openssl enc -d -aes-256-cbc -pbkdf2 -iter 100000 -pass env:ENCRYPTION_KEY -in "$BACKUP_PATH" -out "$DECRYPTED_PATH"; then
+      RESTORE_SOURCE="$DECRYPTED_PATH"
+    else
+      echo "Error: Decryption failed. Check that ENCRYPTION_KEY is correct."
+      exit 1
+    fi
+  fi
+
   # Restore database from backup file
   echo "Running restore"
   if [ -e $DATABASE_PATH ]; then
@@ -128,7 +175,7 @@ restore() {
   # Use restore via online backup API
   if sqlite3 "$DATABASE_PATH" <<SQL
 .timeout ${SQLITE_TIMEOUT_MS}
-.restore '$BACKUP_PATH'
+.restore '$RESTORE_SOURCE'
 SQL
   then
     echo "Successfully restored"
@@ -136,11 +183,19 @@ SQL
       echo "Cleaning up out of date database"
       rm ${DATABASE_PATH}.old
     fi
+    # Clean up temporary files
+    if [ -e "${BACKUP_PATH}.decrypted" ]; then
+      rm -f "${BACKUP_PATH}.decrypted"
+    fi
   else
     echo "Restore failed"
     if [ -e ${DATABASE_PATH}.old ]; then
       echo "Moving out of date database back, hopefully it's better than nothing"
       mv ${DATABASE_PATH}.old $DATABASE_PATH
+    fi
+    # Clean up temporary files if present
+    if [ -e "${BACKUP_PATH}.decrypted" ]; then
+      rm -f "${BACKUP_PATH}.decrypted"
     fi
     exit 1
   fi

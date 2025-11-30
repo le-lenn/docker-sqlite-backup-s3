@@ -1,8 +1,7 @@
 # Docker SQLite to S3
 
-Image: `ghcr.io/le-lenn/docker-sqlite-to-s3`
+SQLite backup utility which backups your sqlite to S3. All configurable via environment variables.
 
-This container periodically runs a backup of a SQLite database to an S3 bucket. It also has the ability to restore.
 
 ## Usage
 
@@ -14,20 +13,8 @@ docker run \
     -e DATABASE_PATH=/data/sqlite3.db \
     -e CRON_SCHEDULE="0 1 * * *" \
     -e S3_BUCKET=mybackupbucket \
-    -e AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE \
-    -e AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY \
-    -e AWS_DEFAULT_REGION=us-west-2 \
-    ghcr.io/le-lenn/docker-sqlite-to-s3:latest cron
-```
-
-### Custom cron timing
-
-```shell
-docker run \
-    -v /path/to/database.db:/data/sqlite3.db \
-    -e DATABASE_PATH=/data/sqlite3.db \
-    -e CRON_SCHEDULE="* * * * *" \
-    -e S3_BUCKET=mybackupbucket \
+    # Optional: encrypt backups before upload
+    # -e ENCRYPTION_KEY=your-strong-passphrase \
     -e AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE \
     -e AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY \
     -e AWS_DEFAULT_REGION=us-west-2 \
@@ -42,6 +29,8 @@ docker run \
     -e DATABASE_PATH=/data/sqlite3.db \
     -e CRON_SCHEDULE="* * * * *" \
     -e S3_BUCKET=mybackupbucket \
+    # Optional: encrypt backups before upload
+    # -e ENCRYPTION_KEY=your-strong-passphrase \
     -e AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE \
     -e AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY \
     -e AWS_DEFAULT_REGION=us-east-1 \
@@ -56,6 +45,8 @@ docker run \
     -v /path/to/database.db:/data/sqlite3.db \
     -e DATABASE_PATH=/data/sqlite3.db \
     -e S3_BUCKET=mybackupbucket \
+    # Optional: encrypt backups before upload
+    # -e ENCRYPTION_KEY=your-strong-passphrase \
     -e AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE \
     -e AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY \
     -e AWS_DEFAULT_REGION=us-west-2 \
@@ -72,6 +63,8 @@ docker run \
     -v /path/to/database.db:/data/sqlite3.db \
     -e DATABASE_PATH=/data/sqlite3.db \
     -e S3_BUCKET=mybackupbucket \
+    # If backups are encrypted, you must set the same key here
+    # -e ENCRYPTION_KEY=your-strong-passphrase \
     -e AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE \
     -e AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY \
     -e AWS_DEFAULT_REGION=us-west-2 \
@@ -94,19 +87,20 @@ docker run \
 
 ## Environment Variables
 
-| Variable        | Description      | Example Usage  | Default   | Optional?  |
+| Variable        | Description      | Example Usage  | Default   | Required |
 | --------------- |:---------------:| -----:| -----:| --------:|
-| `S3_BUCKET`               | Name of bucket | `mybucketname` | None | No |
-| `S3_KEY_PREFIX` | S3 directory to place files in | `backups` or `backups/sqlite` | None | Yes |
-| `AWS_ACCESS_KEY_ID`       | AWS Access key | `AKIAIO...` | None      | Yes (if using instance role) |
-| `AWS_SECRET_ACCESS_KEY`   |  AWS Secret Key |  `wJalrXUtnFE...` | None   | Yes (if using instance role) |
-| `AWS_DEFAULT_REGION`   | AWS Default Region | `us-west-2`    | `us-west-1`   | Yes |
-| `DATABASE_PATH` | Path of database to be backed up (within the container)   | `/myvolume/mydb.db` | None   | No |
-| `BACKUP_PATH` | Path to write the backup (within the container)  | `/myvolume/mybackup.db` | `${DATABASE_PATH}.bak`   | Yes |
-| `ENDPOINT_URL` | URL to S3-compatible endpoint (MinIO, Cloudflare R2, Wasabi) | `https://play.minio.com:9000` | None | Yes |
-| `SQLITE_TIMEOUT_MS` | Busy timeout used by SQLite `.backup`/`.restore` (milliseconds) | `10000` | `10000` | Yes |
-| `CRON_SCHEDULE` | Cron expression for scheduled backups (cron mode only) | `0 1 * * *` | None | No (required for cron) |
-| `POST_WEBHOOK_URL` | URL to call with a POST after successful backup | `https://example.com/hook` | None | Yes |
+| `S3_BUCKET`               | Name of bucket | `mybucketname` | None | Yes |
+| `S3_KEY_PREFIX` | S3 directory to place files in | `backups` or `backups/sqlite` | None | No |
+| `AWS_ACCESS_KEY_ID`       | AWS Access key | `AKIAIO...` | None      | Yes (unless using instance role) |
+| `AWS_SECRET_ACCESS_KEY`   |  AWS Secret Key |  `wJalrXUtnFE...` | None   | Yes (unless using instance role) |
+| `AWS_DEFAULT_REGION`   | AWS Default Region | `us-west-2`    | `us-west-1`   | No |
+| `DATABASE_PATH` | Path of database to be backed up (within the container)   | `/myvolume/mydb.db` | None   | Yes |
+| `BACKUP_PATH` | Path to write the backup (within the container)  | `/myvolume/mybackup.db` | `${DATABASE_PATH}.bak`   | No |
+| `ENDPOINT_URL` | URL to S3-compatible endpoint (MinIO, Cloudflare R2, Wasabi) | `https://play.minio.com:9000` | None | No |
+| `SQLITE_TIMEOUT_MS` | Busy timeout used by SQLite `.backup`/`.restore` (milliseconds) | `10000` | `10000` | No |
+| `CRON_SCHEDULE` | Cron expression for scheduled backups (cron mode only) | `0 1 * * *` | None | Yes (cron mode only) |
+| `POST_WEBHOOK_URL` | URL to call with a POST after successful backup | `https://example.com/hook` | None | No |
+| `ENCRYPTION_KEY` | If set, encrypt backups before upload. Required to restore encrypted backups. | `your-strong-passphrase` | None | No (required to restore encrypted backups) |
 
 
 ## Docker Compose
@@ -148,6 +142,8 @@ services:
       # POST_WEBHOOK_URL: https://example.com/myhook
       # Optional: set if your DB is not at the default path
       # DATABASE_PATH: /data/yourdb.sqlite
+      # Optional: encrypt backups before upload
+      # ENCRYPTION_KEY: your-strong-passphrase
     # Run on a daily schedule at 1am (controlled via CRON_SCHEDULE)
     command: ["cron"]
     restart: unless-stopped
@@ -180,6 +176,8 @@ services:
       # ENDPOINT_URL: https://your-provider-endpoint
       # DATABASE_PATH: /data/yourdb.sqlite
       # SQLITE_TIMEOUT_MS: 10000
+      # If backups are encrypted, you must set the same key here
+      # ENCRYPTION_KEY: your-strong-passphrase
     # Use a timestamp argument or 'latest'
     command: ["restore", "latest"]
     restart: "no"
@@ -195,3 +193,4 @@ Notes:
 
 - Read-only volume during restore: For restores you must mount the shared volume read-write. Example difference: backup sidecar can use `:ro`, restore service must not.
 - App running during restore: If the app is up it may keep SQLite files open and block `.restore`. Do not start the app when restoring.
+- Encrypted backups: When `ENCRYPTION_KEY` is set, backups are encrypted before upload. To restore an encrypted backup you must provide the same `ENCRYPTION_KEY`; otherwise restore fails with an explanatory error.
