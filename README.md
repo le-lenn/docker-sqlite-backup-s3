@@ -29,6 +29,20 @@ docker run \
     cron "* * * * *"
 ```
 
+### Custom s3 endpoint
+
+```shell
+docker run \
+    -v /path/to/database.db:/data/sqlite3.db \
+    -e S3_BUCKET=mybackupbucket \
+    -e AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE \
+    -e AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY \
+    -e AWS_DEFAULT_REGION=us-east-1 \
+    -e ENDPOINT_URL=https://play.minio.com:9000 \
+    jacobtomlinson/sqlite-to-s3:latest \
+    cron "* * * * *"
+```
+
 ### Run backup
 
 ```shell
@@ -66,3 +80,4 @@ docker run \
 | `AWS_DEFAULT_REGION`   | AWS Default Region | `us-west-2`    | `us-west-1`   | Yes |
 | `DATABASE_PATH` | Path of database to be backed up (within the container)   | `/myvolume/mydb.db` | `/data/sqlite3.db`   | Yes |
 | `BACKUP_PATH` | Path to write the backup (within the container)  | `/myvolume/mybackup.db` | `${DATABASE_PATH}.bak`   | Yes |
+| `ENDPOINT_URL` | Url to the s3 service endpoint  | `https://play.minio.com:9000` | None   | Yes |

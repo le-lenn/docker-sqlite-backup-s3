@@ -2,6 +2,8 @@
 
 set -e
 
+shopt -s expand_aliases
+
 # Check and set missing environment vars
 : ${S3_BUCKET:?"S3_BUCKET env variable is required"}
 if [[ -z ${S3_KEY_PREFIX} ]]; then
@@ -12,6 +14,11 @@ else
   fi
 fi
 echo $S3_KEY_PREFIX
+
+if [[ -n ${ENDPOINT_URL} ]]; then
+  alias aws="aws --endpoint-url ${ENDPOINT_URL}"
+fi
+
 export DATABASE_PATH=${DATABASE_PATH:-/data/sqlite3.db}
 export BACKUP_PATH=${BACKUP_PATH:-${DATABASE_PATH}.bak}
 export DATETIME=$(date "+%Y%m%d%H%M%S")
