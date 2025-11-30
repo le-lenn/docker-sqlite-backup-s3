@@ -19,13 +19,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Extract version from tag
-        id: vars
-        run: |
-          raw="${GITHUB_REF_NAME}"
-          ver="${raw#v}"
-          echo "version=$ver" >> "$GITHUB_OUTPUT"
-          echo "raw_tag=$raw" >> "$GITHUB_OUTPUT"
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            # Full semver tag (e.g., 1.2.3)
+            type=semver,pattern={{version}}
+            # Minor tag (e.g., 1.2)
+            type=semver,pattern={{major}}.{{minor}}
+            # Major tag (e.g., 1)
+            type=semver,pattern={{major}}
+            # Fallbacks to support 'v1' and 'v1.2' tags
+            type=match,pattern=^v?(\d+)$,group=1
+            type=match,pattern=^v?(\d+)\.(\d+)$,group=1.2
+            # Always push 'latest' for published releases
+            type=raw,value=latest
 
       - name: Set up QEMU (multi-arch)
         uses: docker/setup-qemu-action@v3
@@ -46,10 +57,9 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.version }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-          labels: |
-            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.version=${{ steps.vars.outputs.version }}
-
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: |
+            type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
+          cache-to: |
+            type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
