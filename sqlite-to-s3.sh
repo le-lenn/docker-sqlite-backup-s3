@@ -152,9 +152,20 @@ restore() {
 
   # Restore database from backup file
   echo "Running restore"
-  if [ -e $DATABASE_PATH ]; then
+  # Move current database aside and delete WAL/SHM sidecar files to avoid interference
+  local WAL_FILE="${DATABASE_PATH}-wal"
+  local SHM_FILE="${DATABASE_PATH}-shm"
+  if [ -e "$DATABASE_PATH" ]; then
     echo "Moving out of date database aside"
-    mv $DATABASE_PATH ${DATABASE_PATH}.old
+    mv "$DATABASE_PATH" "${DATABASE_PATH}.old"
+  fi
+  if [ -e "$WAL_FILE" ]; then
+    echo "Removing stale WAL file"
+    rm -f "$WAL_FILE"
+  fi
+  if [ -e "$SHM_FILE" ]; then
+    echo "Removing stale SHM file"
+    rm -f "$SHM_FILE"
   fi
   # Use restore via online backup API
   if sqlite3 "$DATABASE_PATH" <<SQL
