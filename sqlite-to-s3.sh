@@ -85,22 +85,11 @@ SQL
   fi
 
   echo "Sending file to S3"
-  # Push backup file to S3
-  if aws s3 rm s3://${S3_BUCKET}/${S3_KEY_PREFIX}latest.bak; then
-    echo "Removed latest backup from S3"
-  else
-    echo "No latest backup exists in S3"
-  fi
-  if aws s3 cp "$UPLOAD_SOURCE" s3://${S3_BUCKET}/${S3_KEY_PREFIX}latest.bak; then
-    echo "Backup file copied to s3://${S3_BUCKET}/${S3_KEY_PREFIX}latest.bak"
+  # Push timestamped backup file to S3
+  if aws s3 cp "$UPLOAD_SOURCE" s3://${S3_BUCKET}/${S3_KEY_PREFIX}${DATETIME}.bak; then
+    echo "Backup file uploaded to s3://${S3_BUCKET}/${S3_KEY_PREFIX}${DATETIME}.bak"
   else
     echo "Backup file failed to upload"
-    exit 1
-  fi
-  if aws s3api copy-object --copy-source ${S3_BUCKET}/${S3_KEY_PREFIX}latest.bak --key ${S3_KEY_PREFIX}${DATETIME}.bak --bucket $S3_BUCKET; then
-    echo "Backup file copied to s3://${S3_BUCKET}/${S3_KEY_PREFIX}${DATETIME}.bak"
-  else
-    echo "Failed to create timestamped backup"
     exit 1
   fi
 
@@ -117,23 +106,18 @@ SQL
   echo "Done"
 }
 
-# Pull down the latest backup from S3 and restore it to the database
+# Pull down a timestamped backup from S3 and restore it to the database
 restore() {
-  # Resolve which object to restore (timestamp or "latest")
+  # Resolve which object to restore 
   local input_ts="$1"
   local ts=""
   local object_key=""
-  if [[ -n "${input_ts}" ]]; then
-    ts="${input_ts}"
-  else
-    ts="latest"
+  if [[ -z "${input_ts}" ]]; then
+    echo "Error: restore requires a TIMESTAMP argument (YYYYMMDDHHMMSS)"
+    exit 1
   fi
-
-  if [[ "${ts}" == "latest" ]]; then
-    object_key="${S3_KEY_PREFIX}latest.bak"
-  else
-    object_key="${S3_KEY_PREFIX}${ts}.bak"
-  fi
+  ts="${input_ts}"
+  object_key="${S3_KEY_PREFIX}${ts}.bak"
 
   # Remove old backup file
   if [ -e $BACKUP_PATH ]; then
@@ -216,7 +200,7 @@ case "$1" in
     ;;
   *)
     echo "Invalid command '$@'"
-    echo "Usage: $0 {backup|restore [latest|TIMESTAMP]|cron}"
+    echo "Usage: $0 {backup|restore TIMESTAMP|cron}"
     echo "       cron requires CRON_SCHEDULE env var (e.g. \"0 1 * * *\")"
-    echo "       restore optionally accepts a timestamp (YYYYMMDDHHMMSS) or 'latest'."
+    echo "       restore requires a timestamp (YYYYMMDDHHMMSS)."
 esac

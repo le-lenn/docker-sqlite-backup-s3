@@ -98,8 +98,8 @@ services:
       # SQLITE_TIMEOUT_MS: 10000
       # If backups are encrypted, you must set the same key here
       # ENCRYPTION_KEY: your-strong-passphrase
-    # Use a timestamp argument or 'latest'
-    command: ["restore", "latest"]
+    # Use a timestamp argument (YYYYMMDDHHMMSS)
+    command: ["restore", "20240131120000"]
     restart: "no"
     profiles: ["restore"]
 ```
