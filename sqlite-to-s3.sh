@@ -118,16 +118,22 @@ restore() {
   fi
   ts="${input_ts}"
   object_key="${S3_KEY_PREFIX}${ts}.bak"
+  echo "Restore debug: object_key='${object_key}'"
 
   # Remove old backup file
-  if [ -e $BACKUP_PATH ]; then
-    echo "Removing out of date backup"
-    rm $BACKUP_PATH
+  if [ -e "$BACKUP_PATH" ]; then
+    echo "Removing prior local backup at '$BACKUP_PATH'"
+    rm -f "$BACKUP_PATH"
+  else
+    echo "No prior local backup to remove at '$BACKUP_PATH'"
   fi
   # Get backup file from S3
   echo "Downloading backup from s3://${S3_BUCKET}/${object_key}"
   if aws s3 cp s3://${S3_BUCKET}/${object_key} $BACKUP_PATH; then
-    echo "Downloaded"
+    echo "Downloaded to '$BACKUP_PATH'"
+    if [ -e "$BACKUP_PATH" ]; then
+      echo "Restore debug: downloaded size: $(wc -c < "$BACKUP_PATH" 2>/dev/null) bytes"
+    fi
   else
     echo "Failed to download backup 's3://${S3_BUCKET}/${object_key}'"
     exit 1
@@ -144,17 +150,29 @@ restore() {
     local DECRYPTED_PATH="${BACKUP_PATH}.decrypted"
     if openssl enc -d -aes-256-cbc -pbkdf2 -iter 100000 -pass env:ENCRYPTION_KEY -in "$BACKUP_PATH" -out "$DECRYPTED_PATH"; then
       RESTORE_SOURCE="$DECRYPTED_PATH"
+      echo "Restore debug: decrypted to '$DECRYPTED_PATH' (size: $(wc -c < "$DECRYPTED_PATH" 2>/dev/null) bytes)"
     else
       echo "Error: Decryption failed. Check that ENCRYPTION_KEY is correct."
       exit 1
     fi
   fi
+  echo "Restore debug: using RESTORE_SOURCE='$RESTORE_SOURCE'"
 
   # Restore database from backup file
   echo "Running restore"
   # Move current database aside and delete WAL/SHM sidecar files to avoid interference
   local WAL_FILE="${DATABASE_PATH}-wal"
   local SHM_FILE="${DATABASE_PATH}-shm"
+  local DB_DIR
+  DB_DIR=$(dirname -- "$DATABASE_PATH" 2>/dev/null || echo ".")
+  echo "Restore debug: PWD='$(pwd)'"
+  echo "Restore debug: DATABASE_PATH='$DATABASE_PATH'"
+  echo "Restore debug: DB_DIR='$DB_DIR'"
+  echo "Restore debug: WAL_FILE='$WAL_FILE'"
+  echo "Restore debug: SHM_FILE='$SHM_FILE'"
+  echo "Restore debug: pre-restore existence: main=$([ -e "$DATABASE_PATH" ] && echo yes || echo no), wal=$([ -e "$WAL_FILE" ] && echo yes || echo no), shm=$([ -e "$SHM_FILE" ] && echo yes || echo no)"
+  echo "Restore debug: listing DB_DIR before restore:"
+  ls -la "$DB_DIR" 2>/dev/null || true
   if [ -e "$DATABASE_PATH" ]; then
     echo "Moving out of date database aside"
     mv "$DATABASE_PATH" "${DATABASE_PATH}.old"
@@ -167,6 +185,7 @@ restore() {
     echo "Removing stale SHM file"
     rm -f "$SHM_FILE"
   fi
+  echo "Restore debug: after WAL/SHM removal: wal=$([ -e "$WAL_FILE" ] && echo yes || echo no), shm=$([ -e "$SHM_FILE" ] && echo yes || echo no)"
   # Use restore via online backup API
   if sqlite3 "$DATABASE_PATH" <<SQL
 .timeout ${SQLITE_TIMEOUT_MS}
@@ -182,6 +201,11 @@ SQL
     if [ -e "${BACKUP_PATH}.decrypted" ]; then
       rm -f "${BACKUP_PATH}.decrypted"
     fi
+    echo "Restore debug: post-restore existence: main=$([ -e "$DATABASE_PATH" ] && echo yes || echo no), wal=$([ -e "$WAL_FILE" ] && echo yes || echo no), shm=$([ -e "$SHM_FILE" ] && echo yes || echo no)"
+    echo "Restore debug: listing DB_DIR after restore:"
+    ls -la "$DB_DIR" 2>/dev/null || true
+    echo "Restore debug: journal_mode=$(sqlite3 "$DATABASE_PATH" "PRAGMA journal_mode;" 2>/dev/null || echo '?')"
+    echo "Restore debug: integrity_check=$(sqlite3 "$DATABASE_PATH" "PRAGMA integrity_check;" 2>/dev/null || echo '?')"
   else
     echo "Restore failed"
     if [ -e ${DATABASE_PATH}.old ]; then
