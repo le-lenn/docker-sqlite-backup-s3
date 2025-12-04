@@ -70,6 +70,11 @@ services:
       - app
 ```
 
+Test your backup configuration by triggering a manual backup with:
+```sh
+docker exec <backup container name> sh backup.sh
+```
+
 ## Restore
 > [!CAUTION]
 > DATA LOSS! All database objects will be dropped and re-created.
@@ -79,7 +84,7 @@ services:
 Stop the container using the sqlite db, then run restore.
 
 ```sh
-docker exec <container name> sh restore.sh
+docker exec <backup container name> sh restore.sh
 ```
 
 > [!NOTE]
@@ -90,5 +95,5 @@ docker exec <container name> sh restore.sh
 Stop the container using the sqlite db, then run restore.
 
 ```sh
-docker exec <container name> sh restore.sh <timestamp>
+docker exec <backup container name> sh restore.sh <timestamp>
 ```
